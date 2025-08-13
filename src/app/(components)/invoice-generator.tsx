@@ -466,12 +466,36 @@ export function InvoiceGenerator({ userInfo, isUserInfoComplete, onMissingInfo, 
                         // Don't fail the whole process if usage tracking fails
                     }
 
-                    updateInvoices([...invoices, ...invoicesToCreate].sort((a, b) => {
-                        const dateA = new Date(a.orderDate.split('.').reverse().join('-')).getTime();
-                        const dateB = new Date(b.orderDate.split('.').reverse().join('-')).getTime();
-                        if (dateA !== dateB) return dateA - dateB;
-                        return a.invoiceNumber.localeCompare(b.invoiceNumber);
-                    }));
+                    // Nach dem Speichern sofort die aktuelle Liste aus der DB laden,
+                    // damit die UI die neuen Rechnungen ohne Refresh anzeigt (inkl. korrekter DB-IDs)
+                    try {
+                        const dbInvoices = await InvoiceService.getUserInvoices(user.id);
+                        const convertedInvoices: Invoice[] = dbInvoices.map(dbInvoice => ({
+                          id: dbInvoice.id,
+                          invoiceNumber: dbInvoice.invoice_number,
+                          orderDate: dbInvoice.order_date,
+                          serviceDate: dbInvoice.service_date,
+                          buyerName: dbInvoice.buyer_name,
+                          buyerAddress: dbInvoice.buyer_address,
+                          country: dbInvoice.country,
+                          countryClassification: dbInvoice.country_classification,
+                          netTotal: dbInvoice.net_total,
+                          vatTotal: dbInvoice.vat_total,
+                          grossTotal: dbInvoice.gross_total,
+                          taxNote: dbInvoice.tax_note,
+                          items: dbInvoice.items,
+                        }));
+                        updateInvoices(convertedInvoices);
+                    } catch (reloadErr) {
+                        console.error('Error reloading invoices after save:', reloadErr);
+                        // Fallback: zumindest lokale Drafts anzeigen
+                        updateInvoices([...invoices, ...invoicesToCreate].sort((a, b) => {
+                            const dateA = new Date(a.orderDate.split('.').reverse().join('-')).getTime();
+                            const dateB = new Date(b.orderDate.split('.').reverse().join('-')).getTime();
+                            if (dateA !== dateB) return dateA - dateB;
+                            return a.invoiceNumber.localeCompare(b.invoiceNumber);
+                        }));
+                    }
 
                     toast({
                         title: "Rechnungen erstellt",
