@@ -78,7 +78,8 @@ export default function RegisterPage() {
       if (error) {
         const msg = (error as any)?.message?.toLowerCase?.() || '';
         if (msg.includes('already') || msg.includes('exist')) {
-          setError('Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich stattdessen an.');
+          // Bereits registriert → direkt zur Login-Seite weiterleiten mit Hinweis
+          router.push('/login?reason=already_registered');
         } else {
           setError(error.message);
         }
