@@ -208,12 +208,34 @@ export async function generateInvoicesAction(
         }
     }
 
-    const existingInvoiceIds = new Set(existingInvoices.map(inv => inv.id));
-    
+    // Duplikaterkennung über Fingerprint existierender Rechnungen (robust gegen DB-IDs)
+    const normalizeAddress = (addr?: string) => (addr || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const normalizeText = (t?: string) => (t || '').trim().toLowerCase();
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+    const makeFingerprint = (inv: Invoice) => {
+      const items = [...(inv.items || [])].map((it: any) => ({
+        name: normalizeText(it.name),
+        quantity: Number(it.quantity || 0),
+        netAmount: round2(Number(it.netAmount || 0)),
+        vatRate: round2(Number(it.vatRate || 0)),
+      })).sort((a, b) => a.name.localeCompare(b.name) || a.netAmount - b.netAmount || a.vatRate - b.vatRate || a.quantity - b.quantity);
+      return JSON.stringify({
+        bn: normalizeText(inv.buyerName),
+        ba: normalizeAddress(inv.buyerAddress),
+        od: inv.orderDate,
+        sd: inv.serviceDate,
+        nt: round2(inv.netTotal),
+        vt: round2(inv.vatTotal),
+        gt: round2(inv.grossTotal),
+        items,
+      });
+    };
+    const existingFingerprints = new Set<string>((existingInvoices || []).map((inv) => makeFingerprint(inv)));
+
     const rowsByOrderId = new Map<string, any[]>();
     for (const row of parseResult.data as any[]) {
       const orderId = getColumn(row, ['order id', 'bestellnummer', 'sale id'], normalizedHeaderMap);
-      if (!orderId || existingInvoiceIds.has(orderId)) continue; // Skip if no ID or already exists
+      if (!orderId) continue;
       if (!rowsByOrderId.has(orderId)) {
         rowsByOrderId.set(orderId, []);
       }
@@ -223,6 +245,7 @@ export async function generateInvoicesAction(
     const invoiceDrafts: Omit<Invoice, 'invoiceNumber'>[] = [];
     let totalNetSales = 0;
     let totalVat = 0;
+    const seenFingerprints = new Set<string>();
 
     for (const [orderId, rows] of rowsByOrderId.entries()) {
       const firstRow = rows[0];
@@ -343,6 +366,12 @@ export async function generateInvoicesAction(
         countryClassification,
       };
       
+      // Skip Duplikate anhand Fingerprint (bestehende und innerhalb derselben CSV)
+      const fp = makeFingerprint(invoiceDraft as unknown as Invoice);
+      if (existingFingerprints.has(fp) || seenFingerprints.has(fp)) {
+        continue;
+      }
+      seenFingerprints.add(fp);
       invoiceDrafts.push(invoiceDraft);
       totalNetSales += invoiceDraft.netTotal;
       totalVat += invoiceDraft.vatTotal;
