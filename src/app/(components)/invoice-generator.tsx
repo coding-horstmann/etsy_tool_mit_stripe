@@ -436,8 +436,7 @@ export function InvoiceGenerator({ userInfo, isUserInfoComplete, onMissingInfo, 
                     };
 
                     return {
-                        // Setze die Rechnungs-ID auf die Order-ID, um Duplikate zuverlässig zu erkennen
-                        id: invoice.id,
+                        // DB generiert die UUID; Duplikate werden über Fingerprint/Logik verhindert
                         user_id: user.id,
                         invoice_number: invoice.invoiceNumber,
                         order_date: formatDateForDB(invoice.orderDate),
