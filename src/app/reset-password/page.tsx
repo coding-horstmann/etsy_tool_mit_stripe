@@ -21,21 +21,28 @@ function ResetPasswordForm() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if we have the access token from the email link
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    // Supabase 2.x: Handle Password Recovery via onAuthStateChange, nicht nur Hash-Parsing
+    const hash = window.location.hash;
+    const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+    const type = hashParams.get('type');
     const accessToken = hashParams.get('access_token');
     const refreshToken = hashParams.get('refresh_token');
 
-    if (accessToken && refreshToken) {
-      // Set the session with the tokens from the email
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken
-      });
-    } else {
-      // No valid reset link
+    const isRecovery = type === 'recovery' || (!!accessToken && !!refreshToken);
+    if (!isRecovery) {
       setError('Ungültiger oder abgelaufener Reset-Link. Bitte fordern Sie einen neuen an.');
     }
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (session && session.access_token)) {
+        // Session ist gesetzt bzw. Recovery aktiv
+        setError('');
+      }
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -62,9 +69,8 @@ function ResetPasswordForm() {
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      });
+      // Beim Recovery-Flow ist die Session bereits gesetzt (über Link); dann updateUser
+      const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
         setError(error.message);

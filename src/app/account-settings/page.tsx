@@ -44,6 +44,7 @@ function AccountSettingsContent() {
                     const { data } = await supabase
                         .from('users')
                         .select('subscription_status, stripe_subscription_id, cancel_at_period_end')
+                        .eq('id', user!.id)
                         .single();
                     const status = (data as any)?.subscription_status as string | null;
                     const willCancel = !!(data as any)?.cancel_at_period_end;
@@ -54,10 +55,11 @@ function AccountSettingsContent() {
                     // Entferne Query-Param
                     router.replace('/account-settings');
                     if (!hasSub) {
-                        // Sicherheit: bei gekündigtem/fehlendem Abo sofort korrekte Buttons anzeigen
                         router.refresh();
                     }
-                } catch {}
+                } catch (e) {
+                    console.warn('Portal return refresh failed', e);
+                }
             })();
         }
         if (searchParams?.get('billing') === 'required') {
@@ -87,8 +89,11 @@ function AccountSettingsContent() {
                 setSubscriptionStatus((data as any)?.subscription_status ?? null);
                 setHasStripeSubscription(!!(data as any)?.stripe_subscription_id);
                 setCancelAtPeriodEnd(!!(data as any)?.cancel_at_period_end);
-            } catch {}
-            setLoading(false);
+            } catch (e) {
+                console.warn('Load subscription state failed', e);
+            } finally {
+                setLoading(false);
+            }
         })();
     }, [user]);
 
@@ -292,25 +297,7 @@ function AccountSettingsContent() {
                 </CardContent>
             </Card>
 
-            {/* Passwort zurücksetzen */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Passwort zurücksetzen</CardTitle>
-                    <CardDescription>
-                        Fordern Sie eine "Passwort zurücksetzen" E-Mail an, um Ihr Passwort zu ändern.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button
-                        onClick={handleRequestPasswordReset}
-                        className="w-full"
-                        disabled={changingPassword}
-                    >
-                        {changingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Passwort zurücksetzen
-                    </Button>
-                </CardContent>
-            </Card>
+            {/* Passwort zurücksetzen entfernt: erfolgt über Login-Seite */}
 
             {/* Abonnement (Stripe) */}
             <Card>
